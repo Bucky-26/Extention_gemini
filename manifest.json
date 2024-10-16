@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "GPTx Chat",
+  "version": "1.0",
+  "description": "Develope by Ghost-IT-TEAM",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://gemini-blue-eta.vercel.app/chat*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
