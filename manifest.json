@@ -5,7 +5,8 @@
   "description": "Develope by Ghost-IT-TEAM",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
-    "https://gemini-blue-eta.vercel.app/chat*"
+    "https://gemini-blue-eta.vercel.app/chat*",
+    "https://gemini-blue-eta.vercel.app/v1/image*"
   ],
   "background": {
     "service_worker": "background.js"

@@ -1,15 +1,18 @@
+let userNickname = 'User'; // Default user nickname
+const aiNickname = 'GHOST AI'; // AI nickname
+
 function loadChatHistory() {
     const chatHistoryContainer = document.getElementById('chatHistory');
     
-    chrome.storage.local.get(['chatHistory'], function(result) {
+    chrome.storage.local.get(['chatHistory', 'userNickname'], function(result) {
         const chatHistory = result.chatHistory || [];
+        userNickname = result.userNickname || userNickname;
         
         chatHistoryContainer.innerHTML = '';
         chatHistory.forEach(message => {
             appendMessageToChat(message);
         });
 
-        // Scroll to the bottom of the chat history
         chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
     });
 }
@@ -18,8 +21,34 @@ function appendMessageToChat(message) {
     const chatHistoryContainer = document.getElementById('chatHistory');
     const messageElement = document.createElement('div');
     messageElement.className = `message ${message.role === 'user' ? 'user-message' : 'model-message'}`;
-    messageElement.textContent = message.parts[0].text;
+    
+    const nicknameElement = document.createElement('div');
+    nicknameElement.className = 'nickname';
+    nicknameElement.textContent = message.role === 'user' ? userNickname : aiNickname;
+    
+    const messageContent = document.createElement('div');
+    messageContent.className = 'message-content';
+    
+    message.parts.forEach(part => {
+        if (part.text) {
+            const textElement = document.createElement('p');
+            textElement.textContent = part.text;
+            textElement.className = 'mb-0';
+            messageContent.appendChild(textElement);
+        } else if (part.image) {
+            const imgElement = document.createElement('img');
+            imgElement.src = part.image;
+            imgElement.alt = 'Generated Image';
+            imgElement.className = 'img-fluid mt-2';
+            messageContent.appendChild(imgElement);
+        }
+    });
+    
+    messageElement.appendChild(nicknameElement);
+    messageElement.appendChild(messageContent);
     chatHistoryContainer.appendChild(messageElement);
+
+    chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
 }
 
 function saveChatHistory(newMessage) {
@@ -34,7 +63,24 @@ function saveChatHistory(newMessage) {
     });
 }
 
-window.onload = loadChatHistory;
+window.onload = function() {
+    loadChatHistory();
+    promptForNickname();
+};
+
+function promptForNickname() {
+    chrome.storage.local.get(['userNickname'], function(result) {
+        if (!result.userNickname) {
+            const nickname = prompt("Please enter your nickname:", "User");
+            if (nickname) {
+                userNickname = nickname;
+                chrome.storage.local.set({ userNickname: nickname });
+            }
+        } else {
+            userNickname = result.userNickname;
+        }
+    });
+}
 
 document.getElementById('sendButton').addEventListener('click', sendMessage);
 document.getElementById('messageInput').addEventListener('keypress', function(e) {
@@ -47,23 +93,14 @@ function sendMessage() {
     const messageInput = document.getElementById('messageInput');
     const message = messageInput.value.trim();
 
-    if (!message) {
-        return;
-    }
+    if (!message) return;
 
-    // Show loading message
     document.getElementById('loading').style.display = 'block';
 
-    // Add user message to chat history immediately
     const userMessage = { role: 'user', parts: [{ text: message }] };
     appendMessageToChat(userMessage);
 
-    // Scroll to the bottom of the chat history
-    const chatHistoryContainer = document.getElementById('chatHistory');
-    chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
-
     chrome.runtime.sendMessage({ type: 'chat', message: message }, (response) => {
-        // Hide loading message
         document.getElementById('loading').style.display = 'none';
 
         if (chrome.runtime.lastError) {
@@ -72,9 +109,6 @@ function sendMessage() {
             // Add model response to chat history
             const modelMessage = { role: 'model', parts: [{ text: response.reply }] };
             appendMessageToChat(modelMessage);
-
-            // Scroll to the bottom of the chat history
-            chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
         }
     });
 
@@ -91,3 +125,53 @@ document.getElementById('clearButton').addEventListener('click', () => {
         }
     });
 });
+
+document.getElementById('imageGenButton').addEventListener('click', generateImage);
+
+function generateImage() {
+    const messageInput = document.getElementById('messageInput');
+    const prompt = messageInput.value.trim();
+
+    if (!prompt) {
+        alert("Please enter a prompt for image generation.");
+        return;
+    }
+
+    // Show loading message
+    document.getElementById('loading').style.display = 'block';
+
+    const options = {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'User-Agent': 'insomnia/10.1.0'},
+        body: JSON.stringify({ prompt: prompt })
+    };
+
+    fetch('https://gemini-blue-eta.vercel.app/v1/image', options)
+        .then(response => response.json())
+        .then(response => {
+            // Hide loading message
+            document.getElementById('loading').style.display = 'none';
+
+            if (response.imageUrl) {
+                // Add the generated image to the chat history
+                const imageMessage = { 
+                    role: 'model', 
+                    parts: [
+                        { text: `Generated image for prompt: "${prompt}"` },
+                        { image: response.imageUrl }
+                    ]
+                };
+                appendMessageToChat(imageMessage);
+
+                // Clear the input field
+                messageInput.value = '';
+            } else {
+                alert("Failed to generate image. Please try again.");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('loading').style.display = 'none';
+            alert("An error occurred while generating the image. Please try again.");
+        });
+}
